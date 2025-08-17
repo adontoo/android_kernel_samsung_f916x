@@ -1,0 +1,240 @@
+From 5c06c649d51d6a6d9438d71acf4336a1d452f8f2 Mon Sep 17 00:00:00 2001
+From: Svirusx <45526199+Svirusx@users.noreply.github.com>
+Date: Mon, 15 Jan 2024 15:52:24 +0800
+Subject: [PATCH] Disable knox
+
+---
+ net/core/sock.c                   | 10 ++++++++++
+ net/ipv4/udp.c                    |  8 ++++++++
+ net/netfilter/nf_conntrack_core.c | 16 ++++++++++++++--
+ 3 files changed, 32 insertions(+), 2 deletions(-)
+
+diff --git a/net/core/sock.c b/net/core/sock.c
+index 647a15c46..fd3da3a90 100644
+--- a/net/core/sock.c
++++ b/net/core/sock.c
+@@ -147,11 +147,13 @@
+ 
+ #include <net/tcp.h>
+ #include <net/busy_poll.h>
++#ifdef CONFIG_KNOX_NCM
+ // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ #include <linux/sched.h>
+ #include <linux/pid.h>
+ #include <net/ncm.h>
+ // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++#endif
+ 
+ static DEFINE_MUTEX(proto_list_mutex);
+ static LIST_HEAD(proto_list);
+@@ -634,6 +636,7 @@ static int sock_getbindtodevice(struct sock *sk, char __user *optval,
+ 	return ret;
+ }
+ 
++#ifdef CONFIG_KNOX_NCM
+ // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ /** The function sets the domain name associated with the socket. **/
+ static int sock_set_domain_name(struct sock *sk, char __user *optval,
+@@ -722,6 +725,7 @@ static int sock_set_dns_pid(struct sock *sk, char __user *optval, int optlen)
+ }
+ 
+ // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++#endif
+ static inline void sock_valbool_flag(struct sock *sk, int bit, int valbool)
+ {
+ 	if (valbool)
+@@ -771,6 +775,7 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
+ 	if (optname == SO_BINDTODEVICE)
+ 		return sock_setbindtodevice(sk, optval, optlen);
+ 
++	#ifdef CONFIG_KNOX_NCM
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 	if (optname == SO_SET_DOMAIN_NAME)
+ 		return sock_set_domain_name(sk, optval, optlen);
+@@ -779,6 +784,7 @@ int sock_setsockopt(struct socket *sock, int level, int optname,
+ 	if (optname == SO_SET_DNS_PID)
+ 		return sock_set_dns_pid(sk, optval, optlen);
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++	#endif
+ 	if (optlen < sizeof(int))
+ 		return -EINVAL;
+ 
+@@ -1655,6 +1661,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
+ {
+ 	struct sock *sk;
+ 
++	#ifdef CONFIG_KNOX_NCM
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 	struct pid *pid_struct = NULL;
+ 	struct task_struct *task = NULL;
+@@ -1665,9 +1672,11 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
+ 	int parent_returnValue = -1;
+ 	char full_parent_process_name[PROCESS_NAME_LEN_NAP] = {0};
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++	#endif
+ 	sk = sk_prot_alloc(prot, priority | __GFP_ZERO, family);
+ 	if (sk) {
+ 		sk->sk_family = family;
++		#ifdef CONFIG_KNOX_NCM
+ 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 		/* assign values to members of sock structure when npa flag is present */
+ 		sk->knox_uid = current->cred->uid.val;
+@@ -1711,6 +1720,7 @@ struct sock *sk_alloc(struct net *net, int family, gfp_t priority,
+ 			}
+ 		}
+ 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++		#endif
+ 		/*
+ 		 * See comment in struct sock definition to understand
+ 		 * why we need sk_prot_creator -acme
+diff --git a/net/ipv4/udp.c b/net/ipv4/udp.c
+index 26dcc338c..12ff08786 100644
+--- a/net/ipv4/udp.c
++++ b/net/ipv4/udp.c
+@@ -116,9 +116,11 @@
+ #include <net/sock_reuseport.h>
+ #include <net/addrconf.h>
+ #include <net/udp_tunnel.h>
++#ifdef CONFIG_KNOX_NCM
+ // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ #include <net/ncm.h>
+ // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++#endif
+ 
+ struct udp_table udp_table __read_mostly;
+ EXPORT_SYMBOL(udp_table);
+@@ -2279,6 +2281,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
+ 	if (sk) {
+ 		struct dst_entry *dst = skb_dst(skb);
+ 		int ret;
++		#ifdef CONFIG_KNOX_NCM
+ 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 		struct nf_conn *ct = NULL;
+ 		enum ip_conntrack_info ctinfo;
+@@ -2286,10 +2289,12 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
+ 		char srcaddr[INET6_ADDRSTRLEN_NAP];
+ 		char dstaddr[INET6_ADDRSTRLEN_NAP];
+ 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++		#endif
+ 
+ 		if (unlikely(sk->sk_rx_dst != dst))
+ 			udp_sk_rx_dst_set(sk, dst);
+ 
++		#ifdef CONFIG_KNOX_NCM
+ 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 		/* function to handle open flows with incoming udp packets */
+ 		if (check_ncm_flag()) {
+@@ -2338,6 +2343,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
+ 			}
+ 		}
+ 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++		#endif
+ 
+ 		ret = udp_unicast_rcv_skb(sk, skb, uh);
+ 		sock_put(sk);
+@@ -2350,6 +2356,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
+ 
+ 	sk = __udp4_lib_lookup_skb(skb, uh->source, uh->dest, udptable);
+ 	if (sk) {
++		#ifdef CONFIG_KNOX_NCM
+ 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 		struct nf_conn *ct = NULL;
+ 		enum ip_conntrack_info ctinfo;
+@@ -2404,6 +2411,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
+ 			}
+ 		}
+ 		// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++		#endif
+ 
+ 		return udp_unicast_rcv_skb(sk, skb, uh);
+ 	}
+diff --git a/net/netfilter/nf_conntrack_core.c b/net/netfilter/nf_conntrack_core.c
+index f477ac58b..ffdcb6853 100644
+--- a/net/netfilter/nf_conntrack_core.c
++++ b/net/netfilter/nf_conntrack_core.c
+@@ -17,7 +17,6 @@
+ #include <linux/types.h>
+ #include <linux/netfilter.h>
+ #include <linux/module.h>
+-#include <linux/sched.h>
+ #include <linux/skbuff.h>
+ #include <linux/proc_fs.h>
+ #include <linux/vmalloc.h>
+@@ -55,9 +54,13 @@
+ #include <net/netfilter/nf_nat_core.h>
+ #include <net/netfilter/nf_nat_helper.h>
+ #include <net/netns/hash.h>
++#ifdef CONFIG_KNOX_NCM
+ // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
++
++#include <linux/sched.h>
+ #include <net/ncm.h>
+ // SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++#endif
+ 
+ #include <net/ip.h>
+ 
+@@ -474,6 +477,7 @@ static void nf_ct_add_to_dying_list(struct nf_conn *ct)
+ {
+ 	struct ct_pcpu *pcpu;
+ 
++	#ifdef CONFIG_KNOX_NCM
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 	/* Add 'del_timer(&ct->npa_timeout)' if struct nf_conn->timeout is of type struct timer_list; */
+ 	/* send dying conntrack entry to collect data */
+@@ -481,6 +485,7 @@ static void nf_ct_add_to_dying_list(struct nf_conn *ct)
+ 		knox_collect_conntrack_data(ct, NCM_FLOW_TYPE_CLOSE, 10);
+ 	}
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++	#endif
+ 
+ 	/* add this conntrack to the (per cpu) dying list */
+ 	ct->cpu = smp_processor_id();
+@@ -1237,8 +1242,10 @@ static void gc_worker(struct work_struct *work)
+ 			if (nf_ct_is_expired(tmp)) {
+ 				nf_ct_gc_expired(tmp);
+ 				continue;
++			} 
++			#ifdef CONFIG_KNOX_NCM
+ 			// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+-			} else if ( (tmp != NULL) && (check_ncm_flag()) && (check_intermediate_flag()) && (atomic_read(&tmp->startFlow)) && (atomic_read(&tmp->intermediateFlow)) ) {
++			else if ( (tmp != NULL) && (check_ncm_flag()) && (check_intermediate_flag()) && (atomic_read(&tmp->startFlow)) && (atomic_read(&tmp->intermediateFlow)) ) {
+ 				s32 npa_timeout = tmp->npa_timeout - ((u32)(jiffies));
+ 				if (npa_timeout <= 0) {
+ 					tmp->npa_timeout = ((u32)(jiffies)) + (get_intermediate_timeout() * HZ);
+@@ -1246,6 +1253,7 @@ static void gc_worker(struct work_struct *work)
+ 				}
+ 			}
+ 			// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++			#endif
+ 
+ 			if (nf_conntrack_max95 == 0 || gc_worker_skip_ct(tmp))
+ 				continue;
+@@ -1315,9 +1323,11 @@ __nf_conntrack_alloc(struct net *net,
+ 		     gfp_t gfp, u32 hash)
+ {
+ 	struct nf_conn *ct;
++	#ifdef CONFIG_KNOX_NCM
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 	struct timespec open_timespec;
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++	#endif
+ 
+ 	/* We don't want any race condition at early drop stage */
+ 	atomic_inc(&net->ct.count);
+@@ -1343,6 +1353,7 @@ __nf_conntrack_alloc(struct net *net,
+ 
+ 	spin_lock_init(&ct->lock);
+ 
++	#ifdef CONFIG_KNOX_NCM
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA {
+ 	/* initialize the conntrack structure members when memory is allocated */
+ 	if (ct != NULL) {
+@@ -1365,6 +1376,7 @@ __nf_conntrack_alloc(struct net *net,
+ 		atomic_set(&ct->intermediateFlow, 0);
+ 	}
+ 	// SEC_PRODUCT_FEATURE_KNOX_SUPPORT_NPA }
++	#endif
+ 
+ 	ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple = *orig;
+ 	ct->tuplehash[IP_CT_DIR_ORIGINAL].hnnode.pprev = NULL;
